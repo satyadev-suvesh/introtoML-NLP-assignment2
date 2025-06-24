@@ -1,0 +1,46 @@
+#manual code
+import math
+
+corpus = [
+    "the sun is a star",
+    "the moon is a satellite",
+    "the sun and moon are celestial bodies"
+]
+
+docs = [doc.split() for doc in corpus]
+all_terms = sorted(set(word for doc in docs for word in doc))
+N = len(docs)
+
+df = {term: sum(1 for doc in docs if term in doc) for term in all_terms}
+idf = {term: math.log(N / (1 + df[term])) + 1 for term in all_terms}
+
+tf_idf_values = []
+for doc in docs:
+    tf = {term: doc.count(term) / len(doc) for term in all_terms}
+    tf_idf_values.append({term: tf[term] * idf[term] for term in all_terms})
+
+for i, doc_values in enumerate(tf_idf_values):
+    print(f"Doc {i + 1}:")
+    for term, value in doc_values.items():
+        if value > 0:
+            print(f"  {term}: {value:.4f}")
+
+#sklearn code
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+
+count_vect = CountVectorizer()
+count_matrix = count_vect.fit_transform(corpus)
+count_feature_names = count_vect.get_feature_names_out()
+count_array = count_matrix.toarray()
+
+tfidf_vect = TfidfVectorizer()
+tfidf_matrix = tfidf_vect.fit_transform(corpus)
+tfidf_feature_names = tfidf_vect.get_feature_names_out()
+tfidf_array = tfidf_matrix.toarray()
+
+print("Feature Names:", count_feature_names)
+for i, row in enumerate(count_array):
+    print(f"Doc {i + 1}:", dict(zip(count_feature_names, row)))
+
+for i, row in enumerate(tfidf_array):
+    print(f"Doc {i + 1}:", dict(zip(tfidf_feature_names, [round(val, 4) for val in row])))
