@@ -1,0 +1,57 @@
+import pandas as pd
+import re
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+import gensim.downloader as api
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+from typing import List
+
+df = pd.read_csv('Tweets.csv')[["airline_sentiment", "text"]]
+
+contractions = {"don't":"do not", "can't":"can not", "won't":"will not"}
+
+def preprocess(text):
+    text = text.lower()
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#\w+", "", text)
+    for word, replacement in contractions.items():
+        text = text.replace(word, replacement)
+    text = re.sub(r"[^\w\s]", "", text)
+    tokens = word_tokenize(text)
+    lemmatizer = WordNetLemmatizer()
+    tokens = [lemmatizer.lemmatize(t) for t in tokens if t.isalnum()]
+    return tokens
+
+df["tokens"] = df["text"].apply(preprocess)
+
+w2v_model = api.load("word2vec-google-news-300")
+
+def vectorize(tokens: List[str]) -> np.ndarray:
+    embeddings = [w2v_model[word] for word in tokens if word in w2v_model.key_to_index]
+    return np.mean(embeddings, axis=0) if embeddings else np.zeros(w2v_model.vector_size)
+
+X = np.vstack(df["tokens"].apply(vectorize))
+y = df["airline_sentiment"].map({"negative":0, "neutral":1, "positive":2}).values
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+
+clf = LogisticRegression(max_iter=1000, multi_class='auto')
+clf.fit(X_train, y_train)
+
+accuracy = accuracy_score(y_test, clf.predict(X_test))
+print(f"Test Accuracy: {accuracy:.4f}")
+
+def predict_tweet_sentiment(model, w2v_model, tweet: str) -> str:
+    tokens = preprocess(tweet)
+    vec = vectorize(tokens).reshape(1, -1)
+    prediction = model.predict(vec)[0]
+    sentiment_label = {0: "negative", 1: "neutral", 2: "positive"}
+    return sentiment_label[prediction]
